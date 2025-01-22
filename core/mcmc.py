@@ -5,10 +5,7 @@ import pymc as pm
 import arviz as az
 from pymc.distributions import Distribution
 from typing import Callable
-
-η, κ2 = 0, 1
-α_τ, β_τ = 1/1000, 1/1000
-κ = np.sqrt(κ2)
+from . import Analyzer
 
 
 def get_samples(idata: az.InferenceData):
@@ -41,63 +38,65 @@ def get_summary(
     return df.sort_index()
 
 
+class MCMCAnalyzer(Analyzer):
 
-def analyze(data: np.ndarray, calculate_ci: bool = True, save_path: str = None, **kwargs) -> pd.DataFrame:
-    '''
-    Analyze the data using MCMC.
+    def analyze(self, data: np.ndarray, calculate_ci: bool = True, save_path: str = None, **kwargs) -> pd.DataFrame:
+        '''
+        Analyze the data using MCMC.
 
-    Parameters
-    ----------
-    data : np.ndarray
-        A 2D numpy array with 4 columns: y0, n0, y1, n1.
-    calculate_ci : bool
-        Whether to calculate the credible intervals.
-    save_path : str
-        The path to save the samples. If None, the samples are not saved.
-    **kwargs
-        Additional keyword arguments for the MCMC sampler.
+        Parameters
+        ----------
+        data : np.ndarray
+            A 2D numpy array with 4 columns: y0, n0, y1, n1.
+        calculate_ci : bool
+            Whether to calculate the credible intervals.
+        save_path : str
+            The path to save the samples. If None, the samples are not saved.
+        **kwargs
+            Additional keyword arguments for the MCMC sampler.
 
-    Returns
-    -------
-    pd.DataFrame
-        A pandas DataFrame with the summary statistics.
-    '''
+        Returns
+        -------
+        pd.DataFrame
+            A pandas DataFrame with the summary statistics.
+        '''
 
-    V: dict[str, Distribution] = {}
+        V: dict[str, Distribution] = {}
 
-    N = data.shape[0]
-    y0, n0, y1, n1 = data.T
+        N = data.shape[0]
+        y0, n0, y1, n1 = data.T
 
-    y = np.log(y0 / n0) - np.log(y1 / n1)
-    σ2 = 1 / y0 + 1 / n0 + 1 / y1 + 1 / n1
+        y = np.log(y0 / n0) - np.log(y1 / n1)
+        σ2 = 1 / y0 + 1 / n0 + 1 / y1 + 1 / n1
 
-    σ = np.sqrt(σ2)
+        σ = np.sqrt(σ2)
 
-    model = pm.Model()
+        model = pm.Model()
 
-    with model:
+        with model:
 
-        V["μ"] = pm.Normal("μ", mu=η, sigma=κ)
-        V["RR"] = pm.Deterministic("RR", pm.math.exp(V["μ"]))
-        V["τ^2"] = pm.InverseGamma("τ\u00B2", alpha=α_τ, beta=β_τ)
-        V["τ"] = pm.Deterministic("τ", pm.math.sqrt(V["τ^2"]))
+            V["μ"] = pm.Normal("μ", mu=self.eta, sigma=self.kappa)
+            V["RR"] = pm.Deterministic("RR", pm.math.exp(V["μ"]))
+            V["τ^2"] = pm.InverseGamma("τ\u00B2", alpha=self.alpha_tau, beta=self.beta_tau)
+            V["τ"] = pm.Deterministic("τ", pm.math.sqrt(V["τ^2"]))
 
-        for j in range(N):
-            V[f"θ_{j}"] = pm.Normal(f"θ{chr(0x2080+j)}", mu=V["μ"], sigma=V["τ"])
-            V[f"RR_{j}"] = pm.Deterministic(f"RR{chr(0x2080+j)}", pm.math.exp(V[f"θ_{j}"]))
+            for j in range(N):
+                V[f"θ_{j}"] = pm.Normal(f"θ{chr(0x2080+j)}", mu=V["μ"], sigma=V["τ"])
+                V[f"RR_{j}"] = pm.Deterministic(f"RR{chr(0x2080+j)}", pm.math.exp(V[f"θ_{j}"]))
 
-        for j in range(N):
-            V[f"y_{j}"] = pm.Normal(f"y{chr(0x2080+j)}", mu=V[f"θ_{j}"], sigma=σ[j], observed=y[j])
+            for j in range(N):
+                V[f"y_{j}"] = pm.Normal(f"y{chr(0x2080+j)}", mu=V[f"θ_{j}"], sigma=σ[j], observed=y[j])
 
-        idata = pm.sample(**kwargs)
+            idata = pm.sample(**kwargs)
 
-    if save_path is not None:
-        idata.to_netcdf(save_path)
+        if save_path is not None:
+            idata.to_netcdf(save_path)
 
-    samples = get_samples(idata)
-    summary = get_summary(samples, ci_prob=0.95 if calculate_ci else None)
+        samples = get_samples(idata)
+        summary = get_summary(samples, ci_prob=0.95 if calculate_ci else None)
 
-    return summary.sort_index()
+        return summary.sort_index()
+
 
 if __name__ == "__main__":
     import argparse
@@ -113,5 +112,7 @@ if __name__ == "__main__":
     parser.add_argument("--progressbar", action="store_true")
     args = parser.parse_args()
     data = pd.read_csv(args.data_path, index_col=0).to_numpy()
-    summary = analyze(data, calculate_ci=args.calculate_ci, save_path=args.save_path, random_seed=args.random_seed, draws=args.draws, tune=args.tune, chains=args.chains, progressbar=args.progressbar, target_accept=args.target_accept)
+
+    analyzer = MCMCAnalyzer(eta=0, kappa=1, alpha_tau=1/1000, beta_tau=1/1000)
+    summary = analyzer(data, calculate_ci=args.calculate_ci, save_path=args.save_path, random_seed=args.random_seed, draws=args.draws, tune=args.tune, chains=args.chains, progressbar=args.progressbar, target_accept=args.target_accept)
     print(summary)
