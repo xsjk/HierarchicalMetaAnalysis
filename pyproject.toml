@@ -1,0 +1,8 @@
+[project]
+name = "hierarchicalmetaanalysis"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "pymc>=5.20.0",
+    "sympy>=1.13.3",
+]
