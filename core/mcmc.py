@@ -40,36 +40,15 @@ def get_summary(
 
 class MCMCAnalyzer(Analyzer):
 
-    def analyze(self, data: np.ndarray, calculate_ci: bool = True, save_path: str = None, **kwargs) -> pd.DataFrame:
-        '''
-        Analyze the data using MCMC.
+    def _do_analysis(
+        self, y: np.ndarray, sigma2: np.ndarray, calculate_ci: bool, save_path: str = None, **kwargs
+    ) -> pd.DataFrame:
 
-        Parameters
-        ----------
-        data : np.ndarray
-            A 2D numpy array with 4 columns: y0, n0, y1, n1.
-        calculate_ci : bool
-            Whether to calculate the credible intervals.
-        save_path : str
-            The path to save the samples. If None, the samples are not saved.
-        **kwargs
-            Additional keyword arguments for the MCMC sampler.
-
-        Returns
-        -------
-        pd.DataFrame
-            A pandas DataFrame with the summary statistics.
-        '''
+        σ2 = sigma2
+        σ = np.sqrt(σ2)
+        N = y.shape[0]
 
         V: dict[str, Distribution] = {}
-
-        N = data.shape[0]
-        y0, n0, y1, n1 = data.T
-
-        y = np.log(y0 / n0) - np.log(y1 / n1)
-        σ2 = 1 / y0 + 1 / n0 + 1 / y1 + 1 / n1
-
-        σ = np.sqrt(σ2)
 
         model = pm.Model()
 
@@ -100,6 +79,7 @@ class MCMCAnalyzer(Analyzer):
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, default=None, required=True)
     parser.add_argument("--draws", type=int, default=9000)
@@ -113,6 +93,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
     data = pd.read_csv(args.data_path, index_col=0).to_numpy()
 
-    analyzer = MCMCAnalyzer(eta=0, kappa=1, alpha_tau=1/1000, beta_tau=1/1000)
-    summary = analyzer(data, calculate_ci=args.calculate_ci, save_path=args.save_path, random_seed=args.random_seed, draws=args.draws, tune=args.tune, chains=args.chains, progressbar=args.progressbar, target_accept=args.target_accept)
+    analyzer = MCMCAnalyzer(eta=0, kappa=1, alpha_tau=1 / 1000, beta_tau=1 / 1000)
+    summary = analyzer(
+        data,
+        calculate_ci=args.calculate_ci,
+        save_path=args.save_path,
+        random_seed=args.random_seed,
+        draws=args.draws,
+        tune=args.tune,
+        chains=args.chains,
+        progressbar=args.progressbar,
+        target_accept=args.target_accept,
+    )
     print(summary)

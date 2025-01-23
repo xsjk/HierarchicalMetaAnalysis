@@ -100,24 +100,7 @@ class AnalyticalAnalyzer(Analyzer):
         P["y,τ^2|σ"] = P["y|σ,τ"] * P["τ^2"]
 
 
-    def analyze(self, data: np.ndarray, calculate_ci: bool = True, **kwargs) -> pd.DataFrame:
-        '''
-        Analyze the data using the analytical method.
-
-        Parameters
-        ----------
-        data : np.ndarray
-            A 2D numpy array with 4 columns: y0, n0, y1, n1.
-        calculate_ci : bool
-            Whether to calculate the credible intervals.
-        **kwargs
-            Additional keyword arguments for the integration.
-
-        Returns
-        -------
-        pd.DataFrame
-            A pandas DataFrame with the summary statistics.
-        '''
+    def _do_analysis(self, y: np.ndarray, sigma2: np.ndarray, calculate_ci: bool, **kwargs) -> pd.DataFrame:
 
         S = self.S
         P = self.P
@@ -126,18 +109,10 @@ class AnalyticalAnalyzer(Analyzer):
         η = self.eta
         η2 = self.eta2
 
-        assert data.ndim == 2
-        assert data.shape[1] == 4
-
-        # Compute the RR and estimated standard error
-
-        N = data.shape[0]
-        y0, n0, y1, n1 = data.T
-
-        y = np.log(y0 / n0) - np.log(y1 / n1)
-        σ2 = 1 / y0 + 1 / n0 + 1 / y1 + 1 / n1
-
+        σ2 = sigma2
         σ = np.sqrt(σ2)
+
+        N = y.shape[0]
 
         # Analyze the data
 
@@ -245,6 +220,7 @@ class AnalyticalAnalyzer(Analyzer):
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, default=None, required=True)
     parser.add_argument("--calculate_ci", action="store_true")
@@ -254,5 +230,10 @@ if __name__ == "__main__":
     data = pd.read_csv(args.data_path, index_col=0).to_numpy()
 
     analyzer = AnalyticalAnalyzer(eta=0, kappa=1, alpha_tau=1/1000, beta_tau=1/1000)
-    summary = analyzer(data, calculate_ci=args.calculate_ci, epsabs=args.epsabs, epsrel=args.epsrel)
+    summary = analyzer(
+        data,
+        calculate_ci=args.calculate_ci,
+        epsabs=args.epsabs,
+        epsrel=args.epsrel
+    )
     print(summary)
