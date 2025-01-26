@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import pymc as pm
 import arviz as az
+from argparse import ArgumentParser, Namespace
 from pymc.distributions import Distribution
 from typing import Callable
 from . import Analyzer
@@ -56,8 +57,14 @@ class MCMCAnalyzer(Analyzer):
 
             V["μ"] = pm.Normal("μ", mu=self.eta, sigma=self.kappa)
             V["RR"] = pm.Deterministic("RR", pm.math.exp(V["μ"]))
-            V["τ^2"] = pm.InverseGamma("τ\u00B2", alpha=self.alpha_tau, beta=self.beta_tau)
-            V["τ"] = pm.Deterministic("τ", pm.math.sqrt(V["τ^2"]))
+            if self.tau_prior_type == "uniform":
+                V["τ"] = pm.Uniform("τ", lower=0, upper=self.tau_max)
+                V["τ^2"] = pm.Deterministic("τ\u00B2", V["τ"] ** 2)
+            elif self.tau_prior_type == "inv_gamma":
+                V["τ^2"] = pm.InverseGamma("τ\u00B2", alpha=self.alpha_tau, beta=self.beta_tau)
+                V["τ"] = pm.Deterministic("τ", pm.math.sqrt(V["τ^2"]))
+            else:
+                raise ValueError(f"Invalid tau_prior_type '{self.tau_prior_type}', must in ['uniform', 'inv_gamma']")
 
             for j in range(N):
                 V[f"θ_{j}"] = pm.Normal(f"θ{chr(0x2080+j)}", mu=V["μ"], sigma=V["τ"])
@@ -76,33 +83,19 @@ class MCMCAnalyzer(Analyzer):
 
         return summary.sort_index()
 
+    @classmethod
+    def config_parser(cls, parser: ArgumentParser) -> None:
+        parser.add_argument("--nuts_sampler", choices=["pymc", "nutpie", "numpyro", "blackjax"], default="pymc")
+        parser.add_argument("--draws", type=int, default=5000)
+        parser.add_argument("--tune", type=int, default=5000)
+        parser.add_argument("--chains", type=int, default=1)
+        parser.add_argument("--random_seed", type=int, default=None)
+        parser.add_argument("--target_accept", type=float, default=0.99)
+        parser.add_argument("--save_path", type=str, default=None)
+        parser.add_argument("--progressbar", action="store_true")
 
-if __name__ == "__main__":
-    import argparse
+    @classmethod
+    def extract_kwargs(cls, namespace: Namespace) -> dict:
+        return {k: getattr(namespace, k) for k in ("draws", "tune", "chains", "random_seed", "target_accept", "save_path", "progressbar", "nuts_sampler")}
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str, default=None, required=True)
-    parser.add_argument("--draws", type=int, default=9000)
-    parser.add_argument("--tune", type=int, default=1000)
-    parser.add_argument("--chains", type=int, default=1)
-    parser.add_argument("--random_seed", type=int, default=None)
-    parser.add_argument("--target_accept", type=float, default=0.99)
-    parser.add_argument("--save_path", type=str, default=None)
-    parser.add_argument("--calculate_ci", action="store_true")
-    parser.add_argument("--progressbar", action="store_true")
-    args = parser.parse_args()
-    data = pd.read_csv(args.data_path, index_col=0).to_numpy()
-
-    analyzer = MCMCAnalyzer(eta=0, kappa=1, alpha_tau=1 / 1000, beta_tau=1 / 1000)
-    summary = analyzer(
-        data,
-        calculate_ci=args.calculate_ci,
-        save_path=args.save_path,
-        random_seed=args.random_seed,
-        draws=args.draws,
-        tune=args.tune,
-        chains=args.chains,
-        progressbar=args.progressbar,
-        target_accept=args.target_accept,
-    )
-    print(summary)
+__all__ = ["MCMCAnalyzer"]

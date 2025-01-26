@@ -1,15 +1,16 @@
-import pandas as pd
 import numpy as np
-from typing import Callable
+import pandas as pd
 import scipy.special
-from scipy.stats import rv_continuous
+import sympy as sp
+from argparse import ArgumentParser, Namespace
 from scipy.integrate import quad
 from scipy.optimize import brentq
-import sympy as sp
+from scipy.stats import rv_continuous
 from sympy import Expr, IndexedBase, Idx, symbols
 from sympy.stats import Normal, GammaInverse
-from sympy.stats.rv_interface import density
 from sympy.stats.crv import ContinuousDistribution
+from sympy.stats.rv_interface import density
+from typing import Callable
 from . import Analyzer
 
 
@@ -82,13 +83,19 @@ class AnalyticalAnalyzer(Analyzer):
 
         # set prior for τ
         RV["μ"] = Normal("μ", self.eta, self.kappa)
-        RV["τ^2"] = GammaInverse(S["τ^2"], self.alpha_tau, self.beta_tau)
         RV["θ_j|μ,τ"] = Normal("θ_j", S["μ"], S["τ"])
         RV["y_j|σ_j,μ,τ"] = Normal("y_j", S["μ"], sp.sqrt(S["τ^2"] + S["σ"][S["j"]] ** 2))
 
         P["μ"] = density(RV["μ"])(S["μ"])
-        P["τ^2"] = density(RV["τ^2"])(S["τ^2"])
-        P["τ"] = density(RV["τ^2"])(S["τ"] ** 2) * 2 * S["τ"]
+        if self.tau_prior_type == "uniform":
+            P["τ^2"] = 1 / sp.sqrt(S["τ^2"])
+            P["τ"] = 1
+        elif self.tau_prior_type == "inv_gamma":
+            RV["τ^2"] = GammaInverse(S["τ^2"], self.alpha_tau, self.beta_tau)
+            P["τ^2"] = density(RV["τ^2"])(S["τ^2"])
+            P["τ"] = density(RV["τ^2"])(S["τ"] ** 2) * 2 * S["τ"]
+        else:
+            raise ValueError(f"Invalid tau_prior_type '{self.tau_prior_type}', must in ['uniform', 'inv_gamma']")
 
         P["y|σ,τ"] = (lambda: (
             a := sp.Sum(1 / (S["σ"][S["i"]] ** 2 + S["τ^2"]), (S["i"], 0, S["N"]-1)) + 1 / κ2,
@@ -201,15 +208,19 @@ class AnalyticalAnalyzer(Analyzer):
 
             ## Create the random variables
             RV["μ|y,σ"] = make_rv(cdf=CDF["μ|y,σ"], a=-5, b=5, **kwargs)
-            RV["τ|y,σ"] = make_rv(pdf=PDF["τ|y,σ"], a=0, b=1, **kwargs)
-            RV["τ^2|y,σ"] = make_rv(pdf=PDF["τ^2|y,σ"], a=0, b=1, **kwargs)
+            RV["τ|y,σ"] = make_rv(pdf=PDF["τ|y,σ"], a=0, b=self.tau_max, **kwargs)
+            RV["τ^2|y,σ"] = make_rv(pdf=PDF["τ^2|y,σ"], a=0, b=self.tau_max**2, **kwargs)
             for j in range(N):
                 RV[f"θ_{j}|y,σ"] = make_rv(cdf=CDF[f"θ_{j}|y,σ"], a=-5, b=5, **kwargs)
 
             ## Calculate the 95% credible interval
             var_names = ["μ", "τ", "τ^2"] + [f"θ_{j}" for j in range(N)]
             for v in var_names:
-                CI95[f"{v}|y,σ"] = RV[f"{v}|y,σ"].ppf([0.025, 0.975])
+                try:
+                    CI95[f"{v}|y,σ"] = RV[f"{v}|y,σ"].ppf([0.025, 0.975])
+                except Exception as e:
+                    print(f"Failed to calculate 95% credible interval for {v}: {e}")
+                    CI95[f"{v}|y,σ"] = (np.nan, np.nan)
 
 
             summary["ci_2.5%"] = [CI95[f"θ_{j}|y,σ"][0] for j in range(N)] + [CI95["μ|y,σ"][0], CI95["τ|y,σ"][0], CI95["τ^2|y,σ"][0]] + [np.exp(CI95[f"θ_{j}|y,σ"][0]) for j in range(N)] + [np.exp(CI95["μ|y,σ"][0])]
@@ -217,23 +228,13 @@ class AnalyticalAnalyzer(Analyzer):
 
         return summary.sort_index()
 
+    @classmethod
+    def config_parser(cls, parser: ArgumentParser) -> None:
+        parser.add_argument("--epsabs", type=float, default=1e-3)
+        parser.add_argument("--epsrel", type=float, default=1e-2)
 
-if __name__ == "__main__":
-    import argparse
+    @classmethod
+    def extract_kwargs(cls, namespace: Namespace) -> dict:
+        return {k: getattr(namespace, k) for k in ("epsabs", "epsrel")}
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str, default=None, required=True)
-    parser.add_argument("--calculate_ci", action="store_true")
-    parser.add_argument("--epsabs", type=float, default=1e-3)
-    parser.add_argument("--epsrel", type=float, default=1e-2)
-    args = parser.parse_args()
-    data = pd.read_csv(args.data_path, index_col=0).to_numpy()
-
-    analyzer = AnalyticalAnalyzer(eta=0, kappa=1, alpha_tau=1/1000, beta_tau=1/1000)
-    summary = analyzer(
-        data,
-        calculate_ci=args.calculate_ci,
-        epsabs=args.epsabs,
-        epsrel=args.epsrel
-    )
-    print(summary)
+__all__ = ["AnalyticalAnalyzer"]

@@ -2,15 +2,28 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
+from typing import Literal, get_args, get_origin, get_type_hints
+from argparse import ArgumentParser, Namespace
 
 
 @dataclass
 class Analyzer(ABC):
 
+    # Parameters for prior μ ~ N(η, κ^2)
     eta: float = 0
     kappa: float = 1
-    alpha_tau: float = 1 / 1000
-    beta_tau: float = 1 / 1000
+
+    # Τype of prior τ,
+    #   if "inv_gamma"  then τ^2 ~ Inv-Gamma(α_τ, β_τ)
+    #   if "uniform"    then τ ~ Uniform(0, inf) (inf approximated by τ_max)
+    tau_prior_type: Literal["inv_gamma", "uniform"] = "uniform"
+
+    # Parameters for prior τ^2 ~ Inv-Gamma(α_τ, β_τ) (if tau_prior_type == "inv_gamma")
+    alpha_tau: float = 1
+    beta_tau: float = 1
+
+    # Parameters for prior τ ~ Uniform(0, τ_max) (if tau_prior_type == "uniform")
+    tau_max: float = 10
 
     def __post_init__(self):
         self.eta2 = self.eta**2
@@ -75,13 +88,32 @@ class Analyzer(ABC):
         pass
 
     def __call__(self, *args, **kwds):
-        if len(args) == 1:
+        if len(args) == 0:
+            return self.analyze(**kwds)
+        elif len(args) == 1:
             return self.analyze(data=args[0], **kwds)
         elif len(args) == 2:
             return self.analyze(y=args[0], sigma2=args[1], **kwds)
         else:
             raise ValueError("Invalid number of arguments.")
 
+    @classmethod
+    def config_parser(cls, parser: ArgumentParser) -> None:
+        for k, v in get_type_hints(cls).items():
+            default = getattr(cls, k, None)
+            if origin := get_origin(v):
+                assert origin is Literal, f"Only Literal types are supported for now, got {v}"
+                choices = get_args(v)
+                parser.add_argument(f"--{k}", type=type(choices[0]), choices=choices, default=default)
+            else:
+                parser.add_argument(f"--{k}", type=v, default=default)
+
+    @classmethod
+    def extract_kwargs(cls, namespace: Namespace) -> dict:
+        return {k: getattr(namespace, k) for k in get_type_hints(cls)}
+
 
 from .analytical import AnalyticalAnalyzer
 from .mcmc import MCMCAnalyzer
+
+__all__ = ["Analyzer", "AnalyticalAnalyzer", "MCMCAnalyzer"]
