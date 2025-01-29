@@ -7,7 +7,7 @@ from scipy.integrate import quad
 from scipy.optimize import brentq
 from scipy.stats import rv_continuous
 from sympy import Expr, IndexedBase, Idx, symbols
-from sympy.stats import Normal, GammaInverse
+from sympy.stats import Normal, GammaInverse, Cauchy
 from sympy.stats.crv import ContinuousDistribution
 from sympy.stats.rv_interface import density
 from typing import Callable
@@ -91,11 +91,15 @@ class AnalyticalAnalyzer(Analyzer):
             P["τ^2"] = 1 / sp.sqrt(S["τ^2"])
             P["τ"] = 1
         elif self.tau_prior_type == "inv_gamma":
-            RV["τ^2"] = GammaInverse(S["τ^2"], self.alpha_tau, self.beta_tau)
+            RV["τ^2"] = GammaInverse("τ^2", self.alpha_tau, self.beta_tau)
             P["τ^2"] = density(RV["τ^2"])(S["τ^2"])
             P["τ"] = density(RV["τ^2"])(S["τ"] ** 2) * 2 * S["τ"]
+        elif self.tau_prior_type == "half_cauthy":
+            RV["τ"] = Cauchy("τ", 0, self.gamma_tau)
+            P["τ"] = density(RV["τ"])(S["τ"])
+            P["τ^2"] = density(RV["τ"] ** 2)(S["τ^2"])
         else:
-            raise ValueError(f"Invalid tau_prior_type '{self.tau_prior_type}', must in ['uniform', 'inv_gamma']")
+            raise ValueError(f"Invalid tau_prior_type '{self.tau_prior_type}', must in ['uniform', 'inv_gamma', 'half_cauthy']")
 
         P["y|σ,τ"] = (lambda: (
             a := sp.Sum(1 / (S["σ"][S["i"]] ** 2 + S["τ^2"]), (S["i"], 0, S["N"]-1)) + 1 / κ2,
@@ -187,6 +191,11 @@ class AnalyticalAnalyzer(Analyzer):
         )[-1])(j) for j in range(N))):
             E[f"θ_{j}|y,σ"], Var[f"θ_{j}|y,σ"], E[f"exp(θ_{j})|y,σ"], Var[f"exp(θ_{j})|y,σ"] = r
 
+        for k, v in Var.items():
+            if v < 0:
+                Var[k] = np.inf
+
+
         summary = pd.DataFrame(index=[f"θ{chr(0x2080+j)}" for j in range(N)] + ["μ", "τ", "τ\u00B2"] + [f"RR{chr(0x2080+j)}" for j in range(N)] + ["RR"])
         summary["mean"] = [E[f"θ_{j}|y,σ"] for j in range(N)] + [E["μ|y,σ"], E["τ|y,σ"], E["τ^2|y,σ"]] + [E[f"exp(θ_{j})|y,σ"] for j in range(N)] + [E["exp(μ)|y,σ"]]
         summary["sd"] = [Var[f"θ_{j}|y,σ"] ** .5 for j in range(N)] + [Var["μ|y,σ"] ** .5, Var["τ|y,σ"] ** .5, Var["τ^2|y,σ"] ** .5] + [Var[f"exp(θ_{j})|y,σ"] ** .5 for j in range(N)] + [Var["exp(μ)|y,σ"] ** .5]
@@ -225,6 +234,13 @@ class AnalyticalAnalyzer(Analyzer):
 
             summary["ci_2.5%"] = [CI95[f"θ_{j}|y,σ"][0] for j in range(N)] + [CI95["μ|y,σ"][0], CI95["τ|y,σ"][0], CI95["τ^2|y,σ"][0]] + [np.exp(CI95[f"θ_{j}|y,σ"][0]) for j in range(N)] + [np.exp(CI95["μ|y,σ"][0])]
             summary["ci_97.5%"] = [CI95[f"θ_{j}|y,σ"][1] for j in range(N)] + [CI95["μ|y,σ"][1], CI95["τ|y,σ"][1], CI95["τ^2|y,σ"][1]] + [np.exp(CI95[f"θ_{j}|y,σ"][1]) for j in range(N)] + [np.exp(CI95["μ|y,σ"][1])]
+
+        self.E = E
+        self.Var = Var
+        self.PDF = PDF
+        self.CDF = CDF
+        self.CI95 = CI95
+        self.D = D
 
         return summary.sort_index()
 

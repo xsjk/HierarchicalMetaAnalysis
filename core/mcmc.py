@@ -11,7 +11,19 @@ from . import Analyzer
 
 def get_samples(idata: az.InferenceData):
     post = idata["posterior"]
-    return {var: post[var].values.flatten() for var in post}
+    samples = {}
+    for var in post:
+        values = post[var].values
+        n_chains, n_draws, *shape = values.shape
+        shape = tuple(shape)
+        values = values.reshape(n_chains * n_draws, *shape)
+        if len(shape) == 0:
+            samples[var] = values
+        else:
+            for idx in np.ndindex(shape):
+                name = var + ','.join(map(lambda j: ''.join(chr(0x2080+ord(c)-ord('0')) for c in f'{j[0]:0{len(str(j[1]-1))}d}'), zip(idx, shape)))
+                samples[name] = values[:, *idx]
+    return samples
 
 
 def get_summary(
@@ -56,22 +68,20 @@ class MCMCAnalyzer(Analyzer):
         with model:
 
             V["μ"] = pm.Normal("μ", mu=self.eta, sigma=self.kappa)
-            V["RR"] = pm.Deterministic("RR", pm.math.exp(V["μ"]))
             if self.tau_prior_type == "uniform":
                 V["τ"] = pm.Uniform("τ", lower=0, upper=self.tau_max)
                 V["τ^2"] = pm.Deterministic("τ\u00B2", V["τ"] ** 2)
             elif self.tau_prior_type == "inv_gamma":
                 V["τ^2"] = pm.InverseGamma("τ\u00B2", alpha=self.alpha_tau, beta=self.beta_tau)
                 V["τ"] = pm.Deterministic("τ", pm.math.sqrt(V["τ^2"]))
+            elif self.tau_prior_type == "half_cauthy":
+                V["τ"] = pm.HalfCauchy("τ", beta=self.gamma_tau)
+                V["τ^2"] = pm.Deterministic("τ\u00B2", V["τ"] ** 2)
             else:
-                raise ValueError(f"Invalid tau_prior_type '{self.tau_prior_type}', must in ['uniform', 'inv_gamma']")
+                raise ValueError(f"Invalid tau_prior_type '{self.tau_prior_type}', must in ['uniform', 'inv_gamma', 'half_cauthy']")
 
-            for j in range(N):
-                V[f"θ_{j}"] = pm.Normal(f"θ{chr(0x2080+j)}", mu=V["μ"], sigma=V["τ"])
-                V[f"RR_{j}"] = pm.Deterministic(f"RR{chr(0x2080+j)}", pm.math.exp(V[f"θ_{j}"]))
-
-            for j in range(N):
-                V[f"y_{j}"] = pm.Normal(f"y{chr(0x2080+j)}", mu=V[f"θ_{j}"], sigma=σ[j], observed=y[j])
+            V["θ"] = pm.Normal("θ", mu=V["μ"], sigma=V["τ"], shape=N)
+            V["y"] = pm.Normal("y", mu=V["θ"], sigma=σ, observed=y)
 
             idata = pm.sample(**kwargs)
 
@@ -79,6 +89,9 @@ class MCMCAnalyzer(Analyzer):
             idata.to_netcdf(save_path)
 
         samples = get_samples(idata)
+        samples["RR"] = np.exp(samples["μ"])
+        for j in range(N):
+            samples[f"RR{chr(0x2080+j)}"] = np.exp(samples[f"θ{chr(0x2080+j)}"])
         summary = get_summary(samples, ci_prob=0.95 if calculate_ci else None)
 
         return summary.sort_index()
