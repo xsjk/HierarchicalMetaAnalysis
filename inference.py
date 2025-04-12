@@ -17,27 +17,7 @@ def run(config):
         case _:
             raise ValueError(f"Invalid method '{method}', must be in ['analytical', 'mcmc']")
 
-    kwargs = {}
-
-    match (prior := config["prior"]["mu"])["type"]:
-        case "normal":
-            kwargs["eta"] = prior["mean"]
-            kwargs["kappa"] = prior["sd"]
-        case _:
-            raise ValueError(f"Invalid prior type '{prior['type']}' for mu")
-
-    match (prior := config["prior"]["tau"])["type"]:
-        case "uniform":  # τ ~ Uniform(0, τ_max)
-            kwargs["tau_max"] = prior["max"]
-        case "half_cauchy":  # τ ~ Half-Cauchy(0, γ)
-            kwargs["gamma"] = prior["gamma"]
-        case "sqrt_inv_gamma":  # τ^2 ~ InvGamma(α, β)
-            kwargs["alpha_tau"] = prior["alpha"]
-            kwargs["beta_tau"] = prior["beta"]
-        case _:
-            raise ValueError(f"Invalid prior type '{prior['type']}' for tau")
-
-    analyzer = cls(**kwargs)
+    analyzer = cls.from_config(config["prior"])
 
     input_file = config["input_file"]
     input_file_name_no_ext = os.path.splitext(os.path.basename(input_file))[0]

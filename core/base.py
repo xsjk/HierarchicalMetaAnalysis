@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Self
 
 import numpy as np
 import pandas as pd
@@ -96,3 +96,27 @@ class Analyzer(ABC):
             return self.analyze(y=args[0], sigma2=args[1], **kwds)
         else:
             raise ValueError("Invalid number of arguments.")
+
+    @classmethod
+    def from_config(cls, prior_config: dict) -> Self:
+        kwargs = {}
+
+        match (c := prior_config["mu"])["type"]:
+            case "normal":
+                kwargs["eta"] = c["mean"]
+                kwargs["kappa"] = c["sd"]
+            case _:
+                raise ValueError(f"Invalid prior type '{c['type']}' for mu")
+
+        match (c := prior_config["tau"])["type"]:
+            case "uniform":  # τ ~ Uniform(0, τ_max)
+                kwargs["tau_max"] = c["max"]
+            case "half_cauchy":  # τ ~ Half-Cauchy(0, γ)
+                kwargs["gamma"] = c["gamma"]
+            case "sqrt_inv_gamma":  # τ^2 ~ InvGamma(α, β)
+                kwargs["alpha_tau"] = c["alpha"]
+                kwargs["beta_tau"] = c["beta"]
+            case _:
+                raise ValueError(f"Invalid prior type '{c['type']}' for tau")
+
+        return cls(**kwargs)
