@@ -64,11 +64,11 @@ class MCMCAnalyzer(Analyzer):
             elif self.tau_prior_type == "sqrt_inv_gamma":
                 V["τ^2"] = pm.InverseGamma("τ\u00b2", alpha=self.alpha_tau, beta=self.beta_tau)
                 V["τ"] = pm.Deterministic("τ", pymc.math.sqrt(V["τ^2"]))
-            elif self.tau_prior_type == "half_cauthy":
+            elif self.tau_prior_type == "half_cauchy":
                 V["τ"] = pm.HalfCauchy("τ", beta=self.gamma_tau)
                 V["τ^2"] = pm.Deterministic("τ\u00b2", V["τ"] ** 2)
             else:
-                raise ValueError(f"Invalid tau_prior_type '{self.tau_prior_type}', must in ['uniform', 'sqrt_inv_gamma', 'half_cauthy']")
+                raise ValueError(f"Invalid tau_prior_type '{self.tau_prior_type}', must in ['uniform', 'sqrt_inv_gamma', 'half_cauchy']")
 
             V["θ"] = pm.Normal("θ", mu=V["μ"], sigma=V["τ"], shape=N)
             V["y"] = pm.Normal("y", mu=V["θ"], sigma=σ, observed=y)

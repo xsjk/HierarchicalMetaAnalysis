@@ -34,7 +34,7 @@ def solve_ub(f, y, lower_bound=0.0, upper_bound=10.0, epsrel=1e-6, epsabs=1e-6):
         last_x = x_new
         return integral_value
 
-    return brentq(lambda x: F(x) - y, lower_bound, upper_bound)
+    return brentq(lambda x: F(x) - y, lower_bound, upper_bound, xtol=epsabs, rtol=epsrel)
 
 
 def make_rv(pdf=None, cdf=None, epsrel=1e-6, epsabs=1e-6, a=None, b=None) -> rv_continuous:
@@ -96,12 +96,12 @@ class AnalyticalAnalyzer(Analyzer):
             RS["τ^2"] = GammaInverse("τ^2", self.alpha_tau, self.beta_tau)
             P["τ^2"] = density(RS["τ^2"])(S["τ^2"])
             P["τ"] = density(RS["τ^2"])(S["τ"] ** 2) * 2 * S["τ"]
-        elif self.tau_prior_type == "half_cauthy":
+        elif self.tau_prior_type == "half_cauchy":
             RS["τ"] = Cauchy("τ", 0, self.gamma_tau)
             P["τ"] = density(RS["τ"])(S["τ"])
             P["τ^2"] = density(RS["τ"] ** 2)(S["τ^2"])
         else:
-            raise ValueError(f"Invalid tau_prior_type '{self.tau_prior_type}', must in ['uniform', 'sqrt_inv_gamma', 'half_cauthy']")
+            raise ValueError(f"Invalid tau_prior_type '{self.tau_prior_type}', must in ['uniform', 'sqrt_inv_gamma', 'half_cauchy']")
 
         P["y|σ,τ"] = (
             lambda: (

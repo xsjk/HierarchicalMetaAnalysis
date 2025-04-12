@@ -15,7 +15,7 @@ class Analyzer(ABC):
     # Τype of prior τ,
     #   if "sqrt_inv_gamma"  then τ^2 ~ Inv-Gamma(α_τ, β_τ)
     #   if "uniform"    then τ ~ Uniform(0, inf) (inf approximated by τ_max)
-    tau_prior_type: Literal["sqrt_inv_gamma", "uniform", "half_cauthy"] = "uniform"
+    tau_prior_type: Literal["sqrt_inv_gamma", "uniform", "half_cauchy"] = "uniform"
 
     # Parameters for prior τ^2 ~ Inv-Gamma(α_τ, β_τ) (if tau_prior_type == "sqrt_inv_gamma")
     alpha_tau: float = 1
@@ -24,7 +24,7 @@ class Analyzer(ABC):
     # Parameters for prior τ ~ Uniform(0, τ_max) (if tau_prior_type == "uniform")
     tau_max: float = 10
 
-    # Parameters for prior τ ~ Half-Cauchy(γ_τ) (if tau_prior_type == "half_cauthy")
+    # Parameters for prior τ ~ Half-Cauchy(γ_τ) (if tau_prior_type == "half_cauchy")
     gamma_tau: float = 1
 
     def __post_init__(self):

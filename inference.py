@@ -25,8 +25,7 @@ def run(config):
     summary = analyzer(data=data, calculate_ci=config["calculate_ci"], **config[method])
 
     if config["output_dir"]:
-        if not os.path.exists(config["output_dir"]):
-            os.makedirs(config["output_dir"])
+        os.makedirs(config["output_dir"], exist_ok=True)
         output_file = os.path.join(config["output_dir"], f"{input_file_name_no_ext}_inference_summary.csv")
         if os.path.exists(output_file):
             print(f"Warning: {output_file} already exists. Overwriting.")
