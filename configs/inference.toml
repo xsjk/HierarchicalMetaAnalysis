@@ -1,0 +1,39 @@
+# Configuration file for the inference process
+
+input_file = "data/complete_control.csv"
+
+output_dir = "" # disable saving
+# output_dir = "." # save in the current directory 
+# output_dir = "results/" 
+
+method = "analytical" # "analytical" or "mcmc"
+calculate_ci = true
+
+[prior]
+mu = { type = "normal", mean = 0, sd = 1 }
+tau = { type = "uniform", max = 10 }
+# tau = { type = "half_cauchy", gamma = 1 }
+# tau = { type = "sqrt_inv_gamma", alpha = 0.001, beta = 0.001 }
+
+
+[mcmc] # only used if method = "mcmc"
+# params related to sampler
+nuts_sampler = "numpyro" # "pymc", "nutpie", "numpyro", "blackjax"
+draws = 5000
+tune = 5000
+chains = 1
+random_seed = 42
+target_accept = 0.99
+progressbar = true
+# save_path = "idata.nc"   # path to save the raw samples
+
+
+[analytical] # only used if method = "analytical"
+# params for searching the CI because of the numerical implementation
+epsabs = 1e-3
+epsrel = 1e-2
+
+[analytical.bounds]
+mu = { min = -5, max = 5 }
+tau = { max = 10 }
+theta = { min = -5, max = 5 }

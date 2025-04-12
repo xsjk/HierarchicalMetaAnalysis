@@ -1,8 +1,10 @@
 [project]
 name = "hierarchicalmetaanalysis"
 version = "0.1.0"
+readme = "README.md"
 requires-python = ">=3.11"
-dependencies = [
-    "pymc>=5.20.0",
-    "sympy>=1.13.3",
-]
+dependencies = ["numpyro", "pymc", "sympy"]
+
+[tool.ruff]
+target-version = "py311"
+lint = { ignore = ["E731"] }
