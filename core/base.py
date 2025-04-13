@@ -112,7 +112,7 @@ class Analyzer(ABC):
             case "uniform":  # τ ~ Uniform(0, τ_max)
                 kwargs["tau_max"] = c["max"]
             case "half_cauchy":  # τ ~ Half-Cauchy(0, γ)
-                kwargs["gamma"] = c["gamma"]
+                kwargs["gamma_tau"] = c["gamma"]
             case "sqrt_inv_gamma":  # τ^2 ~ InvGamma(α, β)
                 kwargs["alpha_tau"] = c["alpha"]
                 kwargs["beta_tau"] = c["beta"]

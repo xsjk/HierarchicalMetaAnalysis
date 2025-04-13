@@ -1,5 +1,4 @@
 import os
-import sys
 import tomllib
 from argparse import ArgumentParser
 
@@ -42,8 +41,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = tomllib.load(open(args.config, "rb"))
 
-    try:
-        run(config)
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+    run(config)

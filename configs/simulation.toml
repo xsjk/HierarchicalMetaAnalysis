@@ -1,0 +1,42 @@
+# Configuration file for the simulation process
+
+n_samples = 12800
+seed = 0
+output_dir = "results/"
+
+
+[sample]
+# mu = { type = "fixed", value = 0.14 }
+mu = { type = "normal", mean = 0, sd = 1 }
+
+# tau = { type = "fixed", value = 0.1 }
+tau = { type = "uniform", max = 1 }
+
+sigma = { type = "fixed", values = [
+    0.40,
+    0.34,
+    0.36,
+    0.23,
+    0.90,
+    0.38,
+    0.30,
+    0.46,
+    0.33,
+] }
+
+
+[prior]
+mu = { type = "normal", mean = 0, sd = 1 }
+tau = { type = "uniform", max = 1 }
+# tau = { type = "half_cauchy", gamma = 1 }
+# tau = { type = "sqrt_inv_gamma", alpha = 0.001, beta = 0.001 }
+
+
+[analytical]
+epsabs = 1e-6
+epsrel = 1e-6
+
+[analytical.bounds]
+mu = { min = -5, max = 5 }
+tau = { max = 10 }
+theta = { min = -10, max = 10 }
